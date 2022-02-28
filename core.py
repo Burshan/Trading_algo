@@ -38,6 +38,9 @@ class Core:
         self.telegram_chat_id = config.TELEGRAM_ID
 
     def order(self, side, quantity, symbol, last_price, order_type=ORDER_TYPE_MARKET):
+        """
+        Sets an order request (either but or sell for the Binance API)
+        """
         print("Sending an order...")
         try:
             order = self.client.create_order(
@@ -50,6 +53,9 @@ class Core:
         return True
 
     def telegram_send(self, bot_message):
+        """
+        Sends a massage to our telegram bot.
+        """
         bot_message = bot_message + f" ({self.trade_symbol})"
         send_text = 'https://api.telegram.org/bot' + self.telegram_bot_token + \
                     '/sendMessage?chat_id=' + self.telegram_chat_id + '&parse_mode=Markdown&text=' + bot_message
@@ -57,27 +63,42 @@ class Core:
         return response.json()
 
     def calculate_gain(self, close_price):
+        """
+        TODO: understand this method.
+        """
         diff = close_price - self.bought_price
         return float("{:.2f}".format((diff / self.bought_price) * 100))
 
     @staticmethod
     def clear_array(d_array):
+        """
+        Clears the candles array and returns him.
+        """
         if len(d_array) > 1000:
             data = d_array[-100:]
             return data
         return d_array
 
     def on_open(self, ws):
+        """
+        Called when the socket connection opened.
+        """
         message = "opened connection"
         print(message)
 
     def on_close(self, ws):
+        """
+        Called when the socket connection closed.
+        """
         print('closed connection')
         print('opening connection again')
         self.telegram_send('opening connection again')
         self.open_socket()
 
     def get_historical_data(self):
+        """
+        Gets historical data from Binance API and organize it in data frame.
+        """
         print("Called historical data...")
         candles = self.client.get_historical_klines(self.trade_symbol,
                                                     self.client.KLINE_INTERVAL_1MINUTE, "1 day ago UTC")
@@ -89,11 +110,17 @@ class Core:
         self.closes.extend((lst[-self.macd_start-1:]))
 
     def calculate_rsi(self, np_closes):
+        """
+        RSI Indicator.
+        """
         rsi = talib.RSI(np_closes, self.rsi_period)
         last_rsi = rsi[-1]
         return last_rsi
 
     def calculate_macd(self, np_closes):
+        """
+        MACD Indicator.
+        """
         if len(self.closes) > self.macd_start:
             macd, macdsignal, macdhist = talib.MACD(
                 np_closes, self.macd_fast, self.macd_slow, self.macd_signal_speed)
@@ -110,6 +137,9 @@ class Core:
     #     return upper, middle, lower
 
     def on_message(self, ws, message):
+        """
+        Called whenever we get new socket from Binance.
+        """
         if not self.is_initialized:
             self.get_historical_data()
             self.is_initialized = True
@@ -136,8 +166,6 @@ class Core:
                 print("the current RSI is {}, MACD is {}".format(
                     last_rsi, last_macdhist))
                 if last_rsi >= self.rsi_overbought and (-1.1 <= last_macdhist <= 1.1):
-                    # bollinger_bands(close)
-                    # print(bollinger_bands(close))
                     if self.is_in_position:
                         gain = self.calculate_gain(close)
                         if gain >= self.minimum_gain:
